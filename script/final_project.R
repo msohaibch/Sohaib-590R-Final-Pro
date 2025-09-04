@@ -1,71 +1,82 @@
-#libraries to load.
+# Libraries to load
 library(dplyr)
 library(renv)
 library(tidyverse)
 library(here)
-
 library(janitor)
 library(gtsummary)
 library(broom)
 library(flextable)
-#load the stroke dataset
+
+# Load the stroke dataset
 stroke <- read_csv(here("data", "raw", "StrockDataset.csv"))
 
-##Cleaning the data where gender=other, only 1 row
-stroke <- stroke|>
+# Cleaning the data where gender=other, only 1 row
+stroke <- stroke |>
 	filter(is.na(gender) | tolower(gender) != "other")
-#bmi to numeric and continous variable
-stroke <- stroke %>% mutate(bmi = as.numeric(bmi))
 
+# BMI to numeric and continuous variable
+stroke <- stroke %>%
+	mutate(bmi = as.numeric(bmi))
 
+# Re-code and create new variables
 stroke <- stroke |>
 	mutate(
 		# Gender
 		gender = str_trim(gender),
 		gender = factor(str_to_title(gender),
 										levels = c("Male", "Female"),
-										labels= c("Male", "Female")),
+										labels = c("Male", "Female")
+		),
 
 		# Hypertension
 		hypertension = factor(hypertension,
 													levels = c(0, 1),
-													labels = c("No", "Yes")),
+													labels = c("No", "Yes")
+		),
 
 		# Heart disease
 		heart_disease = factor(heart_disease,
 													 levels = c(0, 1),
-													 labels = c("No", "Yes")),
+													 labels = c("No", "Yes")
+		),
 
 		# Ever married
 		ever_married = factor(ever_married,
 													levels = c("No", "Yes"),
-													labels = c("No", "Yes")),
+													labels = c("No", "Yes")
+		),
 
 		# Work type
 		work_type = factor(work_type,
 											 levels = c("Private", "Self-employed", "Govt_job", "children", "Never_worked"),
-											 labels = c("Private", "Self-employed", "Government Job", "Children", "Never Worked")),
+											 labels = c("Private", "Self-employed", "Government Job", "Children", "Never Worked")
+		),
 
 		# Residence type
 		residence_type = factor(Residence_type,
 														levels = c("Urban", "Rural"),
-														labels = c("Urban", "Rural")),
+														labels = c("Urban", "Rural")
+		),
 
 		# Smoking status
 		smoking_status = factor(smoking_status,
 														levels = c("formerly smoked", "never smoked", "smokes", "Unknown"),
-														labels = c("Formerly Smoked", "Never Smoked", "Currently Smokes", "Unknown")),
+														labels = c("Formerly Smoked", "Never Smoked", "Currently Smokes", "Unknown")
+		),
 
 		# Stroke outcome (0/1)
 		stroke = factor(stroke,
 										levels = c(0, 1),
-										labels = c("No Stroke", "Stroke")),
+										labels = c("No Stroke", "Stroke")
+		),
 
 		# Age groups
 		age_group = cut(age,
 										breaks = c(0, 20, 40, 60, Inf),
 										labels = c("0-19", "20-39", "40-59", "60+"),
-										right = FALSE),
+										right = FALSE
+		),
 
 		# BMI categories
 		bmi_category = case_when(
@@ -76,22 +87,23 @@ stroke <- stroke |>
 			TRUE       ~ "Obese"
 		),
 		bmi_cat = factor(bmi_category,
-										 levels = c("Underweight", "Normal", "Overweight", "Obese")),
+										 levels = c("Underweight", "Normal", "Overweight", "Obese")
+		),
 
 		# Glucose categories
 		glucose_category = case_when(
-			avg_glucose_level < 100            ~ "Normal",
-			avg_glucose_level < 126            ~ "Prediabetic",
+			avg_glucose_level < 100      ~ "Normal",
+			avg_glucose_level < 126      ~ "Prediabetic",
 			avg_glucose_level >= 126 | is.na(avg_glucose_level) ~ "Diabetic"
 		),
 		glucose_cat = factor(glucose_category,
-												 levels = c("Normal", "Prediabetic", "Diabetic"))
+												 levels = c("Normal", "Prediabetic", "Diabetic")
+		)
 	)
 
 
-#table1 summary by stroke category
-
-tbl_summary(
+# Table 1: Summary by stroke category
+table1<-tbl_summary(
 	stroke,
 	by = stroke,
 	include = c(
@@ -114,13 +126,13 @@ tbl_summary(
 		bmi_cat ~ "BMI Category",
 		smoking_status ~ "Smoking Status"
 	),
-	# ensure BMI is summarized as continuous
+	# Ensure BMI is summarized as continuous
 	type = list(bmi ~ "continuous"),
 	statistic = list(
 		bmi ~ "{mean} ({p25}, {p75})"
 	),
 	digits = list(
-		bmi ~ c(1, 1, 1)   # mean, p25, p75 to 1 decimal
+		bmi ~ c(1, 1, 1) # mean, p25, p75 to 1 decimal
 	),
 	missing_text = "Missing"
 ) |>
@@ -143,7 +155,81 @@ tbl_summary(
 	)
 
 
+# Table for Univariate logistic regression
+univariate_analysis_table <- tbl_uvregression(
+	data = stroke,
+	y = stroke, # factor with "Stroke" as event
+	include = c(
+		age, gender, hypertension, heart_disease,
+		ever_married, residence_type,
+		avg_glucose_level, bmi, smoking_status
+	),
+	method = glm,
+	method.args = list(family = binomial()),
+	exponentiate = TRUE, # report ORs
+	label = list(
+		age ~ "Age (years)",
+		gender ~ "Gender",
+		hypertension ~ "Hypertension",
+		heart_disease ~ "Heart Disease",
+		ever_married ~ "Ever Married",
+		residence_type ~ "Residence Type",
+		avg_glucose_level ~ "Average Glucose Level (mg/dL)",
+		bmi ~ "Body Mass Index (kg/m²)",
+		smoking_status ~ "Smoking Status"
+	)
+) |>
+	add_n() |>
+	bold_p(t = 0.05) |>
+	modify_caption("**Table 2. Univariate Logistic Regression Analysis for Stroke Risk**")
 
+
+#graphs
+
+risk_factors <- stroke |>
+	select(stroke, hypertension, heart_disease) |>
+	pivot_longer(
+		cols = c(hypertension, heart_disease),
+		names_to = "risk_factor",
+		values_to = "status"
+	) |>
+	filter(!is.na(status))
+
+ggplot(risk_factors, aes(x = risk_factor, fill = stroke)) +
+	geom_bar(position = "fill") +
+	facet_wrap(~status) +
+	labs(
+		title = "Stroke Prevalence by Risk Factor Status",
+		x = "Risk Factor",
+		y = "Proportion",
+		fill = "Stroke Status"
+	) +
+	theme_minimal() +
+	theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+ggplot(stroke, aes(x = age, fill = stroke)) +
+	geom_histogram(binwidth = 5, alpha = 0.7, position = "dodge") +
+	labs(
+		title = "Age Distribution by Stroke Status",
+		x = "Age (years)",
+		y = "Count",
+		fill = "Stroke Status"
+	) +
+	theme_minimal() +
+	theme(legend.position = "bottom")
+
+
+
+
+table1 |>
+   as_flex_table() |>
+   save_as_docx(path = "table1_descriptive.docx")
+
+univariate_analysis_table |>
+   as_flex_table() |>
+   save_as_docx(path = "table2_univariate.docx")
 
 
 
