@@ -4,7 +4,6 @@ library(renv)
 library(tidyverse)
 library(here)
 library(janitor)
-
 library(gtsummary)
 library(broom)
 library(flextable)
