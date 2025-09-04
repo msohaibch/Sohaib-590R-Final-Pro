@@ -7,19 +7,20 @@ library(janitor)
 library(gtsummary)
 library(broom)
 library(flextable)
+summary(str)
 # load the stroke dataset
-stroke <- read_csv(here("data", "raw", "StrockDataset.csv"))
+stroke_raw <- read_csv(here("data", "raw", "StrockDataset.csv"))
 
 # cleaning the data where gender=other, only 1 row
-stroke <- stroke |>
+stroke_raw <- stroke_raw |>
 	filter(is.na(gender) | tolower(gender) != "other")
 
 # BMI to numeric and continuous variable
-stroke <- stroke %>%
+stroke_raw <- stroke_raw %>%
 	mutate(bmi = as.numeric(bmi))
 
 # recoding and creating new variables
-stroke <- stroke |>
+stroke <- stroke_raw |>
 	mutate(
 		# gender
 		gender = str_trim(gender),
@@ -27,56 +28,46 @@ stroke <- stroke |>
 										levels = c("Male", "Female"),
 										labels = c("Male", "Female")
 		),
-
 		# hypertension
 		hypertension = factor(hypertension,
 													levels = c(0, 1),
 													labels = c("No", "Yes")
 		),
-
 		# heart disease
 		heart_disease = factor(heart_disease,
 													 levels = c(0, 1),
 													 labels = c("No", "Yes")
 		),
-
 		# Ever married
 		ever_married = factor(ever_married,
 													levels = c("No", "Yes"),
 													labels = c("No", "Yes")
 		),
-
 		# work type
 		work_type = factor(work_type,
 											 levels = c("Private", "Self-employed", "Govt_job", "children", "Never_worked"),
 											 labels = c("Private", "Self-employed", "Government Job", "Children", "Never Worked")
 		),
-
 		# residence type
 		residence_type = factor(Residence_type,
 														levels = c("Urban", "Rural"),
 														labels = c("Urban", "Rural")
 		),
-
 		# smoking status
 		smoking_status = factor(smoking_status,
-														levels = c("formerly smoked", "never smoked", "smokes", "Unknown"),
 														labels = c("Formerly Smoked", "Never Smoked", "Currently Smokes", "Unknown")
 		),
-
 		# stroke outcome
 		stroke = factor(stroke,
 										levels = c(0, 1),
 										labels = c("No Stroke", "Stroke")
 		),
-
 		# age groups
 		age_group = cut(age,
 										breaks = c(0, 20, 40, 60, Inf),
 										labels = c("0-19", "20-39", "40-59", "60+"),
 										right = FALSE
 		),
-
 		# BMI categories
 		bmi_category = case_when(
 			is.na(bmi) ~ NA_character_,
@@ -88,7 +79,6 @@ stroke <- stroke |>
 		bmi_cat = factor(bmi_category,
 										 levels = c("Underweight", "Normal", "Overweight", "Obese")
 		),
-
 		# glucose categories
 		glucose_category = case_when(
 			avg_glucose_level < 100      ~ "Normal",
@@ -124,14 +114,6 @@ table1<-tbl_summary(
 		bmi ~ "Body Mass Index (kg/m²)",
 		bmi_cat ~ "BMI Category",
 		smoking_status ~ "Smoking Status"
-	),
-	# ensuring BMI is summarized as continuous
-	type = list(bmi ~ "continuous"),
-	statistic = list(
-		bmi ~ "{mean} ({p25}, {p75})"
-	),
-	digits = list(
-		bmi ~ c(1, 1, 1) # mean, p25, p75 to 1 decimal
 	),
 	missing_text = "Missing"
 ) |>
@@ -232,8 +214,8 @@ univariate_analysis_table |>
 
 #function to create age groups.
 age_grouping <- function(x,
-												cuts = c(0, 40, 60, 80, Inf),
-												labels = c("<40", "40-59", "60-79", "80+")) {
+												cuts = c(0, 40, 60,  Inf),
+												labels = c("<40", "40-59", "60+")) {
 	cut(
 		x,
 		breaks = cuts,
@@ -245,6 +227,14 @@ age_grouping <- function(x,
 
 #new dataset with different age grouping.
 stroke_new_ages <- stroke |>
-	mutate(age_group = make_age_groups(age))
+	mutate(age_group = age_grouping(age))
+
+
+tbl_summary(
+	stroke_new_ages,
+	by = stroke,
+	include = c(age_group, gender, hypertension, heart_disease, smoking_status, bmi, avg_glucose_level),
+	label = list(age_group ~ "Age group")
+)
 
 

@@ -1,26 +1,233 @@
 ---
-title: "final project 590R"
-author: "Sohaib"
+title: "Final Project 590R"
+author: "Muhammad Sohaib"
 format: html
+theme: cosmo
+execute: 
+  echo: false
+
 ---
 
-## Quarto
+***Final Project 590R R Boot Camp***
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
 
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
 
 ```{r}
-1 + 11
+#| warning: false
+library(dplyr)
+library(renv)
+library(tidyverse)
+library(here)
+library(janitor)
+library(gtsummary)
+library(broom)
+library(flextable)
+
+stroke_raw <- read_csv(here("data", "raw", "StrockDataset.csv"))
+# cleaning the data where gender=other, only 1 row
+stroke_raw <- stroke_raw |>
+	filter(is.na(gender) | tolower(gender) != "other")
+# BMI to numeric and continuous variable
+stroke_raw <- stroke_raw |>
+	mutate(bmi = as.numeric(bmi))
+
+##*function for age grouping*
+age_grouping <- function(x,
+												cuts = c(0, 40, 60,  Inf),
+												labels = c("<40", "40-59", "60+")) {
+	cut(x, breaks = cuts, labels = labels, right = FALSE, ordered_result = TRUE
+	)
+}
+
+
+##cleaning and setting up data
+stroke <- stroke_raw |>
+	mutate(
+		# gender
+		gender = str_trim(gender),
+		gender = factor(str_to_title(gender), levels = c("Male", "Female"), labels = c("Male", "Female")
+		),
+		# hypertension
+		hypertension = factor(hypertension, levels = c(0, 1), labels = c("No", "Yes")
+		),
+		# heart disease
+		heart_disease = factor(heart_disease, levels = c(0, 1), labels = c("No", "Yes")
+		),
+		# Ever married
+		ever_married = factor(ever_married, levels = c("No", "Yes"), labels = c("No", "Yes")
+		),
+		# work type
+		work_type = factor(work_type, levels = c("Private", "Self-employed", "Govt_job", "children", "Never_worked"), labels = c("Private", "Self-employed", "Government Job", "Children", "Never Worked")
+		),
+		# residence type
+		residence_type = factor(Residence_type, levels = c("Urban", "Rural"),	labels = c("Urban", "Rural")
+		),
+		# smoking status
+		smoking_status = factor(smoking_status,	labels = c("Formerly Smoked", "Never Smoked", "Currently Smokes", "Unknown")
+		),
+		# stroke outcome
+		stroke = factor(stroke, levels = c(0, 1),	labels = c("No Stroke", "Stroke")
+		),
+		# age groups done using function otpion. 
+		age_group = (age_grouping(age)   ##<<- function applied here. 
+		),
+		# BMI categories
+		bmi_category = case_when(
+			is.na(bmi) ~ NA_character_,
+			bmi < 18.5 ~ "Underweight",
+			bmi < 25   ~ "Normal",
+			bmi < 30   ~ "Overweight",
+			TRUE       ~ "Obese"
+		),
+		bmi_cat = factor(bmi_category,
+										 levels = c("Underweight", "Normal", "Overweight", "Obese")
+		),
+		# glucose categories
+		glucose_category = case_when(
+			avg_glucose_level < 100      ~ "Normal",
+			avg_glucose_level < 126      ~ "Prediabetic",
+			avg_glucose_level >= 126 | is.na(avg_glucose_level) ~ "Diabetic"
+		),
+		glucose_cat = factor(glucose_category,
+												 levels = c("Normal", "Prediabetic", "Diabetic")
+		)
+	)
+
+# saving clean dataset in different formats.
+write_csv( x = stroke, file = here("data", "clean", "stroke_clean.csv"))
+write_rds( x = stroke, file = here("data", "clean", "stroke_clean1.rds"))
+
 ```
 
-You can add options to executable code like this 
+
+
 
 ```{r}
-#| echo: false
-2 * 2
+#| warning: false
+#| label: tbl-one
+#| tbl-cap: "Descriptive Statistics by Stroke"
+table1<-tbl_summary(
+	stroke,
+	by = stroke,
+	include = c(
+		age, age_group, bmi, gender, hypertension, heart_disease,
+		ever_married, work_type, Residence_type,
+		avg_glucose_level, glucose_cat, bmi_cat, smoking_status
+	),
+	label = list(
+		age ~ "Age (years)",
+		age_group ~ "Age Group",
+		gender ~ "Gender",
+		hypertension ~ "Hypertension",
+		heart_disease ~ "Heart Disease",
+		ever_married ~ "Ever Married",
+		work_type ~ "Work Type",
+		Residence_type ~ "Residence Type",
+		avg_glucose_level ~ "Average Glucose Level (mg/dL)",
+		glucose_cat ~ "Glucose Category",
+		bmi ~ "Body Mass Index (kg/m²)",
+		bmi_cat ~ "BMI Category",
+		smoking_status ~ "Smoking Status"
+	),
+	missing_text = "Missing"
+) |>
+	add_p(
+		test = list(
+			all_continuous() ~ "t.test",
+			all_categorical() ~ "chisq.test"
+		),
+		include = c(
+			age, bmi, age_group, gender, hypertension, heart_disease,
+			ever_married, Residence_type, avg_glucose_level, smoking_status
+		)
+	) |>
+	add_overall(col_label = "**Total** N = {N}") |>
+	bold_labels() |>
+	modify_footnote(update = everything() ~ NA) |>
+	modify_header(
+		label = "**Variable**",
+		p.value = "**P**"
+	)
+table1
+
+#saving table in R format
+
+saveRDS(table1, here("outputs", "stroke_table1.rds"))
+
+## inline texts snippets
+age_no_stroke <- inline_text(table1, 
+                             variable = "age", 
+                             column = "stat_1")
+
+age_stroke <- inline_text(table1, 
+                          variable = "age", 
+                          column = "stat_2")
+
+female_stroke <- inline_text(table1, variable = "gender", level = "Female", column = "stat_2")
+
+
+male_stroke <-inline_text(table1, variable = "gender", level = "Male", column = "stat_2")
+
+```
+This study has `r nrow(stroke)` participants and among those  `r male_stroke` males had stroke while `r female_stroke` females had experienced a stroke.
+
+The median age for participants with stroke was `r age_stroke` and for participants without stroke was `r age_no_stroke`.
+Other charateristics and demographics of study participants can be seen in @tbl-one.
+
+```{r}
+#| label: tbl-regression
+#| tbl-cap: "Linear Regression Analysis"
+univariate_analysis_table <- tbl_uvregression(
+	data = stroke,
+	y = stroke, # factor with stroke as event
+	include = c(
+		age, gender, hypertension, heart_disease,
+		ever_married, residence_type,
+		avg_glucose_level, bmi, smoking_status
+	),
+	method = glm,
+	method.args = list(family = binomial()),
+	exponentiate = TRUE, # for ORs
+	label = list(
+		age ~ "Age (years)",
+		gender ~ "Gender",
+		hypertension ~ "Hypertension",
+		heart_disease ~ "Heart Disease",
+		ever_married ~ "Ever Married",
+		residence_type ~ "Residence Type",
+		avg_glucose_level ~ "Average Glucose Level (mg/dL)",
+		bmi ~ "Body Mass Index (kg/m²)",
+		smoking_status ~ "Smoking Status"
+	)
+) |>
+	bold_p(t = 0.05) |>
+	modify_caption("**Table 2. Univariate Logistic Regression Analysis for Stroke Risk**")
+
+univariate_analysis_table
+
+odds_htn<- inline_text(univariate_analysis_table, variable = "hypertension", level = "Yes")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+After linear regression analysis, it was discovered that people with hypertension had `r odds_htn` times the odds of having a stroke compared to who did not have hypertension. The @tbl-regression also shows other variables and their odds of having stroke. 
+
+
+```{r}
+#| warning: false
+#| label: fig-age-distribution
+#| fig-cap: "Age Distribution by Stroke"
+age_dist<-ggplot(stroke, aes(x = age, fill = stroke)) +
+	geom_histogram(binwidth = 5, alpha = 0.7, position = "dodge") +
+	labs(title = "Age Distribution by Stroke Status",	x = "Age (years)",	y = "Count", fill = "Stroke Status") +	theme_minimal() +	theme(legend.position = "bottom")
+#saving the figure and using *"here"*.
+ggsave(filename = "age_by_stroke_status.png", path= here("outputs"), plot = age_dist, width = 10, height = 8)
+
+age_dist
+
+```
+We can se in @fig-age-distribution that higher age had more number of strokes then lesser age. 
+
+**Data Description**
+
+_The analytic file contains r nrow(stroke) observations and r ncol(stroke) variables. Continuous variables (e.g., age, bmi, avg_glucose_level) are summarized with means/SD and medians/IQR; categorical variables (e.g., gender, hypertension, smoking_status) are tabulated as counts and percentages. An overall mean age of `r gtsummary::inline_text(table1, variable = age, pattern = "{median}")` years is reported in @tbl-one. _
+
+[Source of data](https://figshare.com/articles/dataset/_b_Predicting_Stroke_Risk_Dataset_b_/28668398?file=53444630)
