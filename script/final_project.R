@@ -7,7 +7,6 @@ library(janitor)
 library(gtsummary)
 library(broom)
 library(flextable)
-
 # Load the stroke dataset
 stroke <- read_csv(here("data", "raw", "StrockDataset.csv"))
 
